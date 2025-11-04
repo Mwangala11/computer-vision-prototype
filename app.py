@@ -6,16 +6,6 @@ from typing import Optional
 
 from integrated_system import AILearningPlatform
 from config import Config
-import streamlit as st
-import os
-
-# Load Gemini API key (first from Streamlit Secrets, then from .env for local testing)
-GEMINI_API_KEY = st.secrets.get("GEMINI_API_KEY") or os.getenv("GEMINI_API_KEY")
-
-if not GEMINI_API_KEY:
-    st.error("❌ Gemini API key not configured! Please set it in Streamlit Secrets or .env file.")
-else:
-    st.success("✅ Gemini API key loaded successfully!")
 
 # Page configuration
 st.set_page_config(
