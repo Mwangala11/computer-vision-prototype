@@ -1,21 +1,21 @@
 import os
-from dotenv import load_dotenv
 import streamlit as st
+from dotenv import load_dotenv
 
-# Load .env only if it exists (for local development)
+# Load .env locally only (ignored on Streamlit Cloud)
 if os.path.exists(".env"):
     load_dotenv()
 
-# Always read from environment variables
+# Read GEMINI_API_KEY from environment variables (local or cloud)
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 
-# Check if the key is present
+# Check if key exists
 if not GEMINI_API_KEY:
     st.error(
         "Gemini API key not configured!\n"
-        "If running locally, create a .env file with:\n"
-        "GEMINI_API_KEY=your_api_key_here\n"
-        "If deployed, add the key in Streamlit Secrets."
+        "Local: create a .env file with GEMINI_API_KEY=your_api_key_here\n"
+        "Cloud: add GEMINI_API_KEY in Streamlit Secrets"
     )
 else:
     st.success("Gemini API key loaded successfully!")
+
