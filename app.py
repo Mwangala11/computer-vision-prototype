@@ -78,10 +78,8 @@ def process_image(image_file, domains):
         img_byte_arr = io.BytesIO()
         image.save(img_byte_arr, format=image.format or 'PNG')
         img_byte_arr = img_byte_arr.getvalue()
-temp_path = os.path.join(tempfile.gettempdir(), "uploaded_image.jpg")
-
-    
-    with open(temp_path, "wb") as f:
+        temp_path = os.path.join(tempfile.gettempdir(), "uploaded_image.jpg")
+        with open(temp_path, "wb") as f:
             f.write(img_byte_arr)
         result = st.session_state.platform.process_image(temp_path, domains=domains)
         return result
