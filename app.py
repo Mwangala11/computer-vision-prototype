@@ -1,116 +1,223 @@
 import streamlit as st
 from PIL import Image
 import os
-from ai_mentor import AIMentor, get_critical_thinking_guidance, get_solution_template
+from ai_mentor import AIMentor
+from integrated_system import AILearningPlatform
 
-# Configuration
-class Config:
-    CATEGORIES = ["Environment", "Education", "Health", "Infrastructure", "Community"]
+# ------------ PAGE CONFIG ------------
+st.set_page_config(page_title="AI Learning Platform", layout="wide")
 
+# ------------ UTILS ------------
+platform = AILearningPlatform()
 mentor = AIMentor()
 
-# Helper functions
+
 def save_uploaded_image(uploaded_file):
     temp_path = os.path.join("temp_uploaded_image.jpg")
     with open(temp_path, "wb") as f:
         f.write(uploaded_file.getbuffer())
     return temp_path
 
-def process_image(uploaded_file, domains):
-    temp_path = save_uploaded_image(uploaded_file)
-    classification = domains[0]  # Dummy classification for now
-    mission_statement = f"Recognized challenge in {classification} domain. Structured mission: Improve community well-being through targeted interventions."
-    return temp_path, classification, mission_statement
 
-def generate_mission_from_description(description):
-    classification = "Environment"
-    mission_statement = f"Based on the description: '{description}', the structured mission statement is: Enhance community outcomes by addressing key environmental challenges."
-    return classification, mission_statement
+def download_text(text: str, filename: str):
+    st.download_button(
+        label=f"Download {filename}",
+        data=text,
+        file_name=filename,
+        mime="text/plain"
+    )
 
-# Problem Analysis UI
-def display_problem_analysis():
-    st.header("Problem Analysis")
-    st.write("Recognize and translate community challenges into structured mission statements.")
 
-    option = st.radio("Choose input method:", ("Upload Image", "Describe Problem"))
+# ------------- STYLES -------------
+st.markdown("""
+<style>
+    .main-title {font-size:36px;font-weight:800;text-align:center;margin-bottom:-10px;color:#003366;}
+    .subtitle {text-align:center;font-size:16px;color:#444;margin-bottom:25px;}
+    .section-header {font-size:22px;font-weight:700;margin-top:25px;color:#003366;}
+</style>
+""", unsafe_allow_html=True)
 
-    if option == "Upload Image":
-        uploaded_file = st.file_uploader("Upload an image of the problem", type=["jpg", "png", "jpeg"])
-        if uploaded_file:
-            image_path, classification, mission_statement = process_image(uploaded_file, domains=Config.CATEGORIES)
-            image = Image.open(image_path)
-            st.image(image, caption="Uploaded Problem Image", use_column_width=True)
-            st.success(f"Classified as: {classification}")
-            st.markdown(f"**Mission Statement:** {mission_statement}")
-    else:
-        description = st.text_area("Describe the problem")
-        if description:
-            classification, mission_statement = generate_mission_from_description(description)
-            st.success(f"Classified as: {classification}")
-            st.markdown(f"**Mission Statement:** {mission_statement}")
+# ------------ HEADER ------------
+st.markdown("<div class='main-title'>AI Learning Platform</div>", unsafe_allow_html=True)
+st.markdown("<div class='subtitle'>Smart Assistance • Problem Analysis • AI Mentorship</div>", unsafe_allow_html=True)
+st.write("---")
 
-# AI Mentor Modes UI
-def display_critical_thinking_mode():
-    st.subheader("Socratic Mode")
-    query = st.text_area("Enter your query for Socratic guidance", key="ct_input")
-    if st.button("Get Socratic Guidance", key="ct_button_unique"):
-        if query:
-            response = get_critical_thinking_guidance(query)
-            # Display like old app.py style
-            st.markdown(f"**Your Query:** {query}")
-            st.markdown(f"**Socratic Guidance:** {response}")
+# ============= SIDEBAR NAVIGATION =============
+section = st.sidebar.radio(
+    "Navigate",
+    [
+        "▼ Problem Analysis",
+        "▼ AI Mentor"
+    ]
+)
 
-def display_solution_mode():
-    st.subheader("Solution Mode")
-    query = st.text_area("Enter your problem to generate a solution template", key="sol_input")
-    if st.button("Generate Template", key="sol_button_unique"):
-        if query:
-            response = get_solution_template(query)
-            # Display like old app.py style
-            st.markdown(f"**Your Problem:** {query}")
-            st.markdown(f"**Solution Template:** {response}")
+# =============================================
+#          PROBLEM ANALYSIS SECTION
+# =============================================
+if section == "▼ Problem Analysis":
+    st.markdown("<div class='section-header'>Problem Analysis</div>", unsafe_allow_html=True)
 
-def display_interactive_chat():
-    st.subheader("Interactive Chat with AI Mentor")
-    if "chat_history" not in st.session_state:
-        st.session_state.chat_history = []
+    analysis_option = st.selectbox(
+        "Choose a method:",
+        ["Describe a Problem", "Upload Image"]
+    )
 
-    chat_input = st.text_area("Enter your message", key="chat_input")
-    if st.button("Send", key="chat_send_unique"):
-        if chat_input:
-            # Save user message
-            st.session_state.chat_history.append({"user": chat_input, "ai": None})
-            # Correct method in AIMentor
-            ai_response = mentor.interactive_mentoring(chat_input, mode="chat")  # replace with correct internal call
-            st.session_state.chat_history[-1]["ai"] = ai_response.get("mentor_response", ai_response)
+    # ---------- DESCRIBE A PROBLEM ----------
+    if analysis_option == "Describe a Problem":
+        st.subheader("Describe Your Problem")
+        problem_text = st.text_area("Enter the problem:", height=150)
 
-    # Display chat history like old app.py
-    for chat in st.session_state.chat_history:
-        st.markdown(f"**You:** {chat['user']}")
-        if chat["ai"]:
-            st.markdown(f"**AI Mentor:** {chat['ai']}")
-        st.markdown("---")
+        if st.button("Analyze Problem"):
+            if problem_text.strip() == "":
+                st.warning("Please enter a problem description.")
+            else:
+                result = platform.process_text_description(problem_text)
+                if result['success']:
+                    classification = result['classification']
+                    mission = result['mission_statement']
+                    summary = result['summary']
 
-def display_mentor_interface():
-    st.header("AI Mentor")
-    mode = st.radio("Select Mentor Mode:", ["Socratic Mode", "Solution Mode", "Interactive Chat"])
-    if mode == "Socratic Mode":
-        display_critical_thinking_mode()
-    elif mode == "Solution Mode":
-        display_solution_mode()
-    else:
-        display_interactive_chat()
+                    st.success(f"Classified as: {classification.get('category', 'Unknown')}")
+                    st.write(f"Confidence: {classification.get('confidence', 'Unknown')}")
+                    st.write(f"Reasoning: {classification.get('reasoning', '')}")
+                    st.markdown(f"**Mission Statement:** {mission.get('mission_statement', '')}")
+                    st.markdown(f"**Summary:** {summary}")
 
-# Main
-def main():
-    st.title("Community Problem Recognition & AI Mentor System")
-    st.sidebar.title("Navigation")
-    choice = st.sidebar.radio("Go to:", ["Problem Analysis", "AI Mentor"])
+                    # Download buttons
+                    download_text(mission.get('mission_statement', ''), "mission_statement.txt")
+                    download_text(summary, "problem_summary.txt")
+                else:
+                    st.error(f"Error: {result.get('error', 'Analysis failed')}")
 
-    if choice == "Problem Analysis":
-        display_problem_analysis()
-    else:
-        display_mentor_interface()
+    # ---------- UPLOAD IMAGE ----------
+    elif analysis_option == "Upload Image":
+        st.subheader("Upload an Image for Analysis")
+        uploaded_img = st.file_uploader("Choose an image", type=["jpg", "png", "jpeg"])
 
-if __name__ == "__main__":
-    main()
+        if uploaded_img:
+            img_path = save_uploaded_image(uploaded_img)
+            st.image(uploaded_img, caption="Uploaded Image", use_container_width=True)
+
+            if st.button("Analyze Image"):
+                result = platform.process_image(img_path)
+                if result['success']:
+                    classification = result['classification']
+                    mission = result['mission_statement']
+                    summary = result['summary']
+
+                    st.success(f"Classified as: {classification.get('category', 'Unknown')}")
+                    st.write(f"Confidence: {classification.get('confidence', 'Unknown')}")
+                    st.write(f"Reasoning: {classification.get('reasoning', '')}")
+                    st.markdown(f"**Mission Statement:** {mission.get('mission_statement', '')}")
+                    st.markdown(f"**Summary:** {summary}")
+
+                    # Download buttons
+                    download_text(mission.get('mission_statement', ''), "mission_statement.txt")
+                    download_text(summary, "problem_summary.txt")
+                else:
+                    st.error(f"Error: {result.get('error', 'Analysis failed')}")
+
+# =============================================
+#                 AI MENTOR SECTION
+# =============================================
+elif section == "▼ AI Mentor":
+    st.markdown("<div class='section-header'>AI Mentor</div>", unsafe_allow_html=True)
+
+    mentor_option = st.selectbox(
+        "Choose Mentor Mode:",
+        ["Socratic Mode", "Solution Mode", "Interactive Chat"]
+    )
+
+    # ---------- SOCRATIC MODE ----------
+    if mentor_option == "Socratic Mode":
+        st.subheader("Socratic Mode")
+        st.write("Receive guiding questions to help you think deeper.")
+        user_query = st.text_area("Ask a question:")
+
+        if st.button("Generate Socratic Response"):
+            if user_query.strip() == "":
+                st.warning("Please type something.")
+            else:
+                response = mentor.critical_thinking_mode(user_query)
+                if response['success']:
+                    st.markdown("**GUIDING QUESTIONS:**")
+                    for q in response['guiding_questions']:
+                        st.write(f"- {q}")
+
+                    st.markdown("**REFLECTION PROMPTS:**")
+                    for r in response['reflection_prompts']:
+                        st.write(f"- {r}")
+
+                    st.markdown("**CHALLENGE POINTS:**")
+                    for c in response['challenge_points']:
+                        st.write(f"- {c}")
+
+                    st.markdown("**NEXT STEPS:**")
+                    for n in response['next_steps']:
+                        st.write(f"- {n}")
+
+                    full_response = response.get('full_response', '')
+                    download_text(full_response, "socratic_response.txt")
+                else:
+                    st.error(f"Error: {response.get('error', 'Failed to generate response')}")
+
+    # ---------- SOLUTION MODE ----------
+    elif mentor_option == "Solution Mode":
+        st.subheader("Solution Mode")
+        st.write("Get direct, actionable answers.")
+        user_query = st.text_area("Ask your question:")
+
+        if st.button("Generate Solution"):
+            if user_query.strip() == "":
+                st.warning("Please type something.")
+            else:
+                response = mentor.solution_mode(user_query)
+                if response['success']:
+                    template = response.get('template', {})
+                    st.markdown("**Solution Template:**")
+                    for section_name, lines in template.items():
+                        st.markdown(f"**{section_name}:**")
+                        for line in lines:
+                            st.write(f"- {line}")
+
+                    st.markdown("**Implementation Guide:**")
+                    st.write(response.get('implementation_guide', ''))
+
+                    st.markdown("**Tips:**")
+                    for tip in response.get('tips', []):
+                        st.write(f"- {tip}")
+
+                    full_response = response.get('full_response', '')
+                    download_text(full_response, "solution_response.txt")
+                else:
+                    st.error(f"Error: {response.get('error', 'Failed to generate response')}")
+
+    # ---------- INTERACTIVE CHAT ----------
+    elif mentor_option == "Interactive Chat":
+        st.subheader("Interactive Chat")
+
+        if "chat_history" not in st.session_state:
+            st.session_state.chat_history = []
+
+        for user_msg, ai_msg in st.session_state.chat_history:
+            with st.chat_message("user"):
+                st.write(user_msg)
+            with st.chat_message("assistant"):
+                st.write(ai_msg)
+
+        user_input = st.chat_input("Type your message...")
+
+        if user_input:
+            with st.chat_message("user"):
+                st.write(user_input)
+
+            ai_reply = mentor.interactive_mentoring(user_input).get('mentor_response', '')
+
+            with st.chat_message("assistant"):
+                st.write(ai_reply)
+
+            st.session_state.chat_history.append((user_input, ai_reply))
+
+        if st.button("Clear Chat History"):
+            st.session_state.chat_history = []
+            st.experimental_rerun()

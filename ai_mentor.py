@@ -5,22 +5,22 @@ from config import Config
 
 
 class AIMentor:
-    """AI Mentor providing guidance through critical thinking and solution templates"""
-   
+    """AI Mentor providing Socratic guidance, solution templates, and interactive chat"""
+
     def __init__(self, api_key: Optional[str] = None):
         self.api_key = api_key or Config.GEMINI_API_KEY
         genai.configure(api_key=self.api_key)
-        self.model = genai.GenerativeModel(Config.TEXT_MODEL)
+        self.model = genai.GenerativeModel("gemini-2.5-flash")
         self.conversation_history = []
-   
-    def critical_thinking_mode(self, problem_description: str,
-                              context: Optional[str] = None) -> Dict:
+
+    # --------------------------
+    # Critical Thinking Mode
+    # --------------------------
+    def critical_thinking_mode(self, problem_description: str, context: Optional[str] = None) -> Dict:
         prompt = self._create_critical_thinking_prompt(problem_description, context)
-       
         try:
             result_text = self._generate_with_retry(prompt)
             parsed = self._parse_socratic_response(result_text)
-           
             return {
                 'success': True,
                 'mode': 'Critical Thinking',
@@ -31,31 +31,20 @@ class AIMentor:
                 'next_steps': parsed.get('next_steps', []),
                 'full_response': result_text
             }
-           
         except Exception as e:
-            return {
-                'success': False,
-                'error': str(e),
-                'mode': 'Critical Thinking'
-            }
-   
-    def solution_mode(self, problem_description: str,
-                     template_type: str = 'auto',
-                     category: Optional[str] = None) -> Dict:
+            return {'success': False, 'error': str(e), 'mode': 'Critical Thinking'}
 
+    # --------------------------
+    # Solution Mode
+    # --------------------------
+    def solution_mode(self, problem_description: str, template_type: str = 'auto', category: Optional[str] = None) -> Dict:
         if template_type == 'auto':
             template_type = self._determine_template_type(problem_description, category)
-       
-        prompt = self._create_solution_template_prompt(
-            problem_description,
-            template_type,
-            category
-        )
-       
+
+        prompt = self._create_solution_template_prompt(problem_description, template_type, category)
         try:
             result_text = self._generate_with_retry(prompt)
             parsed = self._parse_template_response(result_text, template_type)
-           
             return {
                 'success': True,
                 'mode': 'Solution',
@@ -66,342 +55,125 @@ class AIMentor:
                 'tips': parsed.get('tips', []),
                 'full_response': result_text
             }
-           
         except Exception as e:
-            return {
-                'success': False,
-                'error': str(e),
-                'mode': 'Solution'
-            }
-   
-    def interactive_mentoring(self, user_message: str,
-                            mode: str = 'critical_thinking') -> Dict:
+            return {'success': False, 'error': str(e), 'mode': 'Solution'}
 
-        self.conversation_history.append({
-            'role': 'user',
-            'content': user_message
-        })
-       
+    # --------------------------
+    # Interactive Chat Mode
+    # --------------------------
+    def interactive_mentoring(self, user_message: str, mode: str = 'critical_thinking') -> Dict:
+        # Append user message to conversation
+        self.conversation_history.append({'role': 'user', 'content': user_message})
+
+        # Prepare prompt with context from last 6 exchanges
         prompt = self._create_interactive_prompt(user_message, mode)
-       
         try:
-            mentor_response = self._generate_with_retry(prompt)
-           
-            self.conversation_history.append({
-                'role': 'mentor',
-                'content': mentor_response
-            })
-           
+            response_text = self._generate_with_retry(prompt)
+            # Append AI response to conversation
+            self.conversation_history.append({'role': 'mentor', 'content': response_text})
             return {
                 'success': True,
                 'mode': mode,
                 'user_message': user_message,
-                'mentor_response': mentor_response,
+                'mentor_response': response_text,
                 'conversation_length': len(self.conversation_history)
             }
-           
         except Exception as e:
-            return {
-                'success': False,
-                'error': str(e),
-                'mode': mode
-            }
-   
+            return {'success': False, 'error': str(e), 'mode': mode}
+
+    # --------------------------
+    # Reset conversation
+    # --------------------------
     def reset_conversation(self):
-        """Clear conversation history"""
         self.conversation_history = []
-   
+
     # --------------------------
-    # Helper functions
+    # Gemini API call with retries
     # --------------------------
-   
     def _generate_with_retry(self, prompt: str, max_retries: int = 3, wait_seconds: int = 2) -> str:
-        """Generate content from Gemini API with retry on 429 errors"""
         retries = 0
         while retries < max_retries:
             try:
                 response = self.model.generate_content(prompt)
                 return response.text
             except Exception as e:
-                if "429" in str(e):
+                if "429" in str(e):  # Rate limit
                     retries += 1
-                    time.sleep(wait_seconds * retries)  # exponential backoff
+                    time.sleep(wait_seconds * retries)
                 else:
                     raise e
-        raise Exception("Exceeded retry limit due to rate limits (429).")
-   
-    # Prompt creation
+        raise Exception("Exceeded retry limit due to API rate limits (429)")
+
+    # --------------------------
+    # Prompt creation helpers
+    # --------------------------
     def _create_critical_thinking_prompt(self, problem_description: str, context: Optional[str] = None) -> str:
-        prompt = f"""You are a Socratic mentor who guides learners through critical thinking and reflection.
-Your role is to ask thought-provoking questions rather than give direct answers.
-
-Problem/Topic: {problem_description}
-"""
+        prompt = f"You are a Socratic mentor guiding learners with questions, not answers.\nProblem: {problem_description}\n"
         if context:
-            prompt += f"\nContext: {context}\n"
-       
-        prompt += """
-Generate Socratic guidance in this format:
-
-GUIDING QUESTIONS:
-[3-5 open-ended questions that help the learner explore the problem deeply]
-
-REFLECTION PROMPTS:
-[2-3 prompts that encourage self-reflection and analysis]
-
-CHALLENGE POINTS:
-[2-3 challenging perspectives or assumptions to examine]
-
-NEXT STEPS:
-[Suggested thinking exercises or exploration activities]
-
-Remember: Ask questions, don't provide solutions. Guide discovery through inquiry.
-"""
+            prompt += f"Context: {context}\n"
+        prompt += "\nGenerate:\nGUIDING QUESTIONS:\nREFLECTION PROMPTS:\nCHALLENGE POINTS:\nNEXT STEPS:\n"
         return prompt
 
-    def _create_solution_template_prompt(self, problem_description: str,
-                                        template_type: str,
-                                        category: Optional[str] = None) -> str:
-        template_instructions = {
-            'swot': """
-Generate a SWOT Analysis template:
-
-STRENGTHS:
-[Internal positive factors]
-
-WEAKNESSES:
-[Internal limitations]
-
-OPPORTUNITIES:
-[External favorable conditions]
-
-THREATS:
-[External challenges]
-
-STRATEGIC INSIGHTS:
-[Key takeaways and recommendations]
-""",
-            'budget': """
-Generate a Budget Outline template:
-
-REVENUE/FUNDING SOURCES:
-[Expected income or funding]
-
-EXPENSES:
-- Personnel
-- Materials
-- Operations
-- Contingency
-
-BUDGET TIMELINE:
-[Phased allocation]
-
-COST-SAVING OPPORTUNITIES:
-[Ideas for efficiency]
-""",
-            'action_plan': """
-Generate an Action Plan template:
-
-OBJECTIVES:
-[Clear, measurable goals]
-
-ACTION ITEMS:
-[Step-by-step tasks with timeline]
-
-RESPONSIBLE PARTIES:
-[Who does what]
-
-RESOURCES NEEDED:
-[What's required]
-
-SUCCESS METRICS:
-[How to measure progress]
-
-RISK MITIGATION:
-[Potential challenges and solutions]
-""",
-            'stakeholder': """
-Generate a Stakeholder Analysis template:
-
-KEY STAKEHOLDERS:
-[List of involved parties]
-
-STAKEHOLDER INTERESTS:
-[What each stakeholder cares about]
-
-INFLUENCE LEVEL:
-[High/Medium/Low for each]
-
-ENGAGEMENT STRATEGY:
-[How to involve each stakeholder]
-
-COMMUNICATION PLAN:
-[How and when to communicate]
-""",
-            'timeline': """
-Generate a Project Timeline template:
-
-PHASES:
-[Major project phases]
-
-MILESTONES:
-[Key achievement points with dates]
-
-DEPENDENCIES:
-[What depends on what]
-
-CRITICAL PATH:
-[Most time-sensitive activities]
-
-BUFFER TIME:
-[Contingency periods]
-"""
-        }
-       
-        instruction = template_instructions.get(template_type, template_instructions['action_plan'])
-       
-        prompt = f"""You are a solution-oriented mentor helping create practical frameworks.
-
-Problem: {problem_description}
-"""
+    def _create_solution_template_prompt(self, problem_description: str, template_type: str, category: Optional[str] = None) -> str:
+        instruction = f"Create a {template_type.upper()} template for the following problem:\n{problem_description}"
         if category:
-            prompt += f"Category: {category}\n"
-       
-        prompt += f"""
-Template Type: {template_type.upper().replace('_', ' ')}
-
-{instruction}
-
-IMPLEMENTATION GUIDE:
-[Step-by-step guide to use this template]
-
-PRACTICAL TIPS:
-[3-5 actionable tips for success]
-
-Tailor all sections specifically to the problem described above.
-"""
-        return prompt
+            instruction += f"\nCategory: {category}"
+        return instruction
 
     def _create_interactive_prompt(self, user_message: str, mode: str) -> str:
         history_context = ""
-        if self.conversation_history:
-            history_context = "\nConversation history:\n"
-            for entry in self.conversation_history[-4:]:
-                role = entry['role'].title()
-                history_context += f"{role}: {entry['content']}\n"
-       
+        for entry in self.conversation_history[-6:]:
+            role = entry['role'].title()
+            history_context += f"{role}: {entry['content']}\n"
         if mode == 'critical_thinking':
-            system_role = """You are a Socratic mentor. Continue guiding through questions.
-Ask probing questions, encourage reflection, challenge assumptions."""
+            system_role = "You are a Socratic mentor. Continue guiding through questions and reflections."
         else:
-            system_role = """You are a solution-focused mentor. Provide practical frameworks,
-actionable advice, and concrete next steps."""
-       
-        prompt = f"""{system_role}
-{history_context}
-
-User: {user_message}
-
-Mentor response:"""
+            system_role = "You are a solution-focused mentor. Provide practical advice, frameworks, and next steps."
+        prompt = f"{system_role}\nConversation history:\n{history_context}\nUser: {user_message}\nMentor response:"
         return prompt
 
+    # --------------------------
+    # Helper methods for templates
+    # --------------------------
     def _determine_template_type(self, problem_description: str, category: Optional[str] = None) -> str:
         desc_lower = problem_description.lower()
-        if any(word in desc_lower for word in ['budget', 'cost', 'funding', 'money', 'finance']):
+        if any(word in desc_lower for word in ['budget', 'cost', 'funding', 'finance']):
             return 'budget'
-        elif any(word in desc_lower for word in ['stakeholder', 'community', 'people', 'involve']):
+        elif any(word in desc_lower for word in ['stakeholder', 'community', 'people']):
             return 'stakeholder'
-        elif any(word in desc_lower for word in ['timeline', 'schedule', 'when', 'deadline']):
+        elif any(word in desc_lower for word in ['timeline', 'schedule', 'deadline']):
             return 'timeline'
-        elif any(word in desc_lower for word in ['strength', 'weakness', 'opportunity', 'threat', 'analyze']):
+        elif any(word in desc_lower for word in ['strength', 'weakness', 'opportunity', 'threat']):
             return 'swot'
         else:
             return 'action_plan'
 
     # --------------------------
-    # Parsing functions
+    # Parsing methods
     # --------------------------
-   
     def _parse_socratic_response(self, response: str) -> Dict:
-        parsed = {}
         sections = {
-            'questions': ['GUIDING QUESTIONS:', 'Guiding Questions:'],
-            'reflections': ['REFLECTION PROMPTS:', 'Reflection Prompts:'],
-            'challenges': ['CHALLENGE POINTS:', 'Challenge Points:'],
-            'next_steps': ['NEXT STEPS:', 'Next Steps:']
+            'questions': 'GUIDING QUESTIONS:',
+            'reflections': 'REFLECTION PROMPTS:',
+            'challenges': 'CHALLENGE POINTS:',
+            'next_steps': 'NEXT STEPS:'
         }
-        for key, headers in sections.items():
-            for header in headers:
-                if header in response:
-                    content = self._extract_section_content(response, header, sections)
-                    parsed[key] = self._parse_list_items(content)
-                    break
-        return parsed
-   
-    def _parse_template_response(self, response: str, template_type: str) -> Dict:
         parsed = {}
-        if 'IMPLEMENTATION GUIDE:' in response:
-            template_text = response.split('IMPLEMENTATION GUIDE:')[0]
-            guide_and_rest = response.split('IMPLEMENTATION GUIDE:')[1]
-           
-            parsed['template'] = self._parse_template_structure(template_text, template_type)
-           
-            if 'PRACTICAL TIPS:' in guide_and_rest:
-                guide = guide_and_rest.split('PRACTICAL TIPS:')[0].strip()
-                tips = guide_and_rest.split('PRACTICAL TIPS:')[1].strip()
-                parsed['guide'] = guide
-                parsed['tips'] = self._parse_list_items(tips)
+        for key, header in sections.items():
+            if header in response:
+                content = response.split(header)[1].split('\n\n')[0]
+                parsed[key] = [line.strip('-•* ') for line in content.split('\n') if line.strip()]
             else:
-                parsed['guide'] = guide_and_rest.strip()
-                parsed['tips'] = []
-        else:
-            parsed['template'] = {'raw': response}
-            parsed['guide'] = ''
-            parsed['tips'] = []
-       
+                parsed[key] = []
         return parsed
 
-    def _parse_template_structure(self, template_text: str, template_type: str) -> Dict:
-        lines = template_text.split('\n')
-        structure = {}
-        current_section = None
-        for line in lines:
-            line = line.strip()
-            if not line:
-                continue
-            if line.isupper() and ':' in line:
-                current_section = line.replace(':', '').strip()
-                structure[current_section] = []
-            elif current_section:
-                structure[current_section].append(line)
-        return structure
-
-    def _extract_section_content(self, response: str, header: str, all_sections: Dict) -> str:
-        start_idx = response.find(header) + len(header)
-        end_idx = len(response)
-        for section_headers in all_sections.values():
-            for other_header in section_headers:
-                if other_header != header and other_header in response[start_idx:]:
-                    idx = response.find(other_header, start_idx)
-                    if idx < end_idx:
-                        end_idx = idx
-        return response[start_idx:end_idx].strip()
-
-    def _parse_list_items(self, text: str) -> List[str]:
-        items = []
-        for line in text.split('\n'):
-            line = line.strip()
-            if not line:
-                continue
-            line = line.lstrip('•-–—*►▪▫').strip()
-            if line and line[0].isdigit() and '.' in line[:3]:
-                line = line.split('.', 1)[1].strip()
-            if line:
-                items.append(line)
-        return items
+    def _parse_template_response(self, response: str, template_type: str) -> Dict:
+        return {'template': {'raw': response}, 'guide': '', 'tips': []}
 
 
+# --------------------------
 # Convenience functions
+# --------------------------
 def get_critical_thinking_guidance(problem: str, context: Optional[str] = None) -> Dict:
     mentor = AIMentor()
     return mentor.critical_thinking_mode(problem, context)
