@@ -11,7 +11,7 @@ class Config:
     GEMINI_API_KEY = os.getenv('GEMINI_API_KEY')
     
     # Model configurations
-    VISION_MODEL = "gemini-1.5-flash"-latest  # Gemini Vision model
+    VISION_MODEL = "gemini-1.5-flash"-latest"  # Gemini Vision model
     TEXT_MODEL = "gemini-1.5-flash-latest"  # For NLP tasks
     
     # Problem categories
