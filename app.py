@@ -11,13 +11,11 @@ st.set_page_config(page_title="AI Learning Platform", layout="wide")
 platform = AILearningPlatform()
 mentor = AIMentor()
 
-
 def save_uploaded_image(uploaded_file):
     temp_path = os.path.join("temp_uploaded_image.jpg")
     with open(temp_path, "wb") as f:
         f.write(uploaded_file.getbuffer())
     return temp_path
-
 
 def download_text(text: str, filename: str):
     st.download_button(
@@ -26,7 +24,6 @@ def download_text(text: str, filename: str):
         file_name=filename,
         mime="text/plain"
     )
-
 
 # ------------- STYLES -------------
 st.markdown("""
@@ -71,23 +68,33 @@ if section == "▼ Problem Analysis":
             if problem_text.strip() == "":
                 st.warning("Please enter a problem description.")
             else:
-                result = platform.process_text_description(problem_text)
-                if result['success']:
-                    classification = result['classification']
-                    mission = result['mission_statement']
-                    summary = result['summary']
+                # --- Use text classifier ---
+                classification_result = platform.problem_classifier.classify_problem(problem_text)
 
-                    st.success(f"Classified as: {classification.get('category', 'Unknown')}")
-                    st.write(f"Confidence: {classification.get('confidence', 'Unknown')}")
-                    st.write(f"Reasoning: {classification.get('reasoning', '')}")
+                if classification_result['success']:
+                    category = classification_result['category']
+                    confidence = classification_result['confidence']
+                    reasoning = classification_result['reasoning']
+                    full_response = classification_result['full_response']
+
+                    st.success(f"Classified as: {category}")
+                    st.write(f"Confidence: {confidence}")
+                    st.write(f"Reasoning: {reasoning}")
+
+                    # Generate mission statement
+                    mission = platform.mission_generator.generate_mission_statement(
+                        problem_text,
+                        context=f"Category: {category}"
+                    )
+
                     st.markdown(f"**Mission Statement:** {mission.get('mission_statement', '')}")
-                    st.markdown(f"**Summary:** {summary}")
+                    st.markdown(f"**Summary:** {platform._create_text_summary(problem_text, classification_result, mission)}")
 
                     # Download buttons
                     download_text(mission.get('mission_statement', ''), "mission_statement.txt")
-                    download_text(summary, "problem_summary.txt")
+                    download_text(platform._create_text_summary(problem_text, classification_result, mission), "problem_summary.txt")
                 else:
-                    st.error(f"Error: {result.get('error', 'Analysis failed')}")
+                    st.error(f"Error: {classification_result.get('error', 'Analysis failed')}")
 
     # ---------- UPLOAD IMAGE ----------
     elif analysis_option == "Upload Image":
@@ -99,23 +106,25 @@ if section == "▼ Problem Analysis":
             st.image(uploaded_img, caption="Uploaded Image", use_container_width=True)
 
             if st.button("Analyze Image"):
-                result = platform.process_image(img_path)
-                if result['success']:
-                    classification = result['classification']
-                    mission = result['mission_statement']
-                    summary = result['summary']
+                # --- Use full process_image pipeline ---
+                analysis_result = platform.process_image(img_path)
 
-                    st.success(f"Classified as: {classification.get('category', 'Unknown')}")
-                    st.write(f"Confidence: {classification.get('confidence', 'Unknown')}")
-                    st.write(f"Reasoning: {classification.get('reasoning', '')}")
+                if analysis_result['success']:
+                    classification_result = analysis_result['classification']
+                    mission = analysis_result['mission_statement']
+
+                    st.success(f"Classified as: {classification_result.get('category', 'Unknown')}")
+                    st.write(f"Confidence: {classification_result.get('confidence', 'Unknown')}")
+                    st.write(f"Reasoning: {classification_result.get('reasoning', 'N/A')}")
+
                     st.markdown(f"**Mission Statement:** {mission.get('mission_statement', '')}")
-                    st.markdown(f"**Summary:** {summary}")
+                    st.markdown(f"**Summary:** {analysis_result.get('summary', '')}")
 
                     # Download buttons
                     download_text(mission.get('mission_statement', ''), "mission_statement.txt")
-                    download_text(summary, "problem_summary.txt")
+                    download_text(analysis_result.get('summary', ''), "problem_summary.txt")
                 else:
-                    st.error(f"Error: {result.get('error', 'Analysis failed')}")
+                    st.error(f"Error: {analysis_result.get('error', 'Analysis failed')}")
 
 # =============================================
 #                 AI MENTOR SECTION
@@ -174,18 +183,23 @@ elif section == "▼ AI Mentor":
                 response = mentor.solution_mode(user_query)
                 if response['success']:
                     template = response.get('template', {})
-                    st.markdown("**Solution Template:**")
-                    for section_name, lines in template.items():
-                        st.markdown(f"**{section_name}:**")
-                        for line in lines:
-                            st.write(f"- {line}")
+                    if template:
+                        st.markdown("**Solution Template:**")
+                        for section_name, lines in template.items():
+                            st.markdown(f"**{section_name}:**")
+                            for line in lines:
+                                st.write(f"- {line}")
 
-                    st.markdown("**Implementation Guide:**")
-                    st.write(response.get('implementation_guide', ''))
+                    guide = response.get('implementation_guide', '')
+                    if guide:
+                        st.markdown("**Implementation Guide:**")
+                        st.write(guide)
 
-                    st.markdown("**Tips:**")
-                    for tip in response.get('tips', []):
-                        st.write(f"- {tip}")
+                    tips = response.get('tips', [])
+                    if tips:
+                        st.markdown("**Tips:**")
+                        for tip in tips:
+                            st.write(f"- {tip}")
 
                     full_response = response.get('full_response', '')
                     download_text(full_response, "solution_response.txt")

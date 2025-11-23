@@ -14,7 +14,7 @@ class AIMentor:
         self.conversation_history = []
 
     # --------------------------
-    # Critical Thinking Mode
+    # Critical Thinking / Socratic Mode
     # --------------------------
     def critical_thinking_mode(self, problem_description: str, context: Optional[str] = None) -> Dict:
         prompt = self._create_critical_thinking_prompt(problem_description, context)
@@ -38,10 +38,12 @@ class AIMentor:
     # Solution Mode
     # --------------------------
     def solution_mode(self, problem_description: str, template_type: str = 'auto', category: Optional[str] = None) -> Dict:
+        # Determine template type automatically if needed
         if template_type == 'auto':
             template_type = self._determine_template_type(problem_description, category)
 
         prompt = self._create_solution_template_prompt(problem_description, template_type, category)
+
         try:
             result_text = self._generate_with_retry(prompt)
             parsed = self._parse_template_response(result_text, template_type)
@@ -62,14 +64,10 @@ class AIMentor:
     # Interactive Chat Mode
     # --------------------------
     def interactive_mentoring(self, user_message: str, mode: str = 'critical_thinking') -> Dict:
-        # Append user message to conversation
         self.conversation_history.append({'role': 'user', 'content': user_message})
-
-        # Prepare prompt with context from last 6 exchanges
         prompt = self._create_interactive_prompt(user_message, mode)
         try:
             response_text = self._generate_with_retry(prompt)
-            # Append AI response to conversation
             self.conversation_history.append({'role': 'mentor', 'content': response_text})
             return {
                 'success': True,
@@ -97,7 +95,7 @@ class AIMentor:
                 response = self.model.generate_content(prompt)
                 return response.text
             except Exception as e:
-                if "429" in str(e):  # Rate limit
+                if "429" in str(e):
                     retries += 1
                     time.sleep(wait_seconds * retries)
                 else:
@@ -118,6 +116,7 @@ class AIMentor:
         instruction = f"Create a {template_type.upper()} template for the following problem:\n{problem_description}"
         if category:
             instruction += f"\nCategory: {category}"
+        instruction += "\nInclude sections, implementation guide, and practical tips."
         return instruction
 
     def _create_interactive_prompt(self, user_message: str, mode: str) -> str:
@@ -129,8 +128,7 @@ class AIMentor:
             system_role = "You are a Socratic mentor. Continue guiding through questions and reflections."
         else:
             system_role = "You are a solution-focused mentor. Provide practical advice, frameworks, and next steps."
-        prompt = f"{system_role}\nConversation history:\n{history_context}\nUser: {user_message}\nMentor response:"
-        return prompt
+        return f"{system_role}\nConversation history:\n{history_context}\nUser: {user_message}\nMentor response:"
 
     # --------------------------
     # Helper methods for templates
@@ -168,7 +166,50 @@ class AIMentor:
         return parsed
 
     def _parse_template_response(self, response: str, template_type: str) -> Dict:
-        return {'template': {'raw': response}, 'guide': '', 'tips': []}
+        parsed = {}
+        guide_split = response.split('IMPLEMENTATION GUIDE:')
+        template_text = guide_split[0].strip()
+        guide_and_tips = guide_split[1] if len(guide_split) > 1 else ''
+
+        if 'PRACTICAL TIPS:' in guide_and_tips:
+            guide_part, tips_part = guide_and_tips.split('PRACTICAL TIPS:')
+            parsed['guide'] = guide_part.strip()
+            parsed['tips'] = self._parse_list_items(tips_part.strip())
+        else:
+            parsed['guide'] = guide_and_tips.strip()
+            parsed['tips'] = []
+
+        parsed['template'] = self._parse_template_structure(template_text, template_type)
+        return parsed
+
+    def _parse_template_structure(self, template_text: str, template_type: str) -> Dict:
+        lines = template_text.split('\n')
+        structure = {}
+        current_section = None
+
+        for line in lines:
+            line = line.strip()
+            if not line:
+                continue
+            if line.isupper() and ':' in line:
+                current_section = line.replace(':', '').strip()
+                structure[current_section] = []
+            elif current_section:
+                structure[current_section].append(line)
+        return structure
+
+    def _parse_list_items(self, text: str) -> List[str]:
+        items = []
+        for line in text.split('\n'):
+            line = line.strip()
+            if not line:
+                continue
+            line = line.lstrip('•-–—*►▪▫').strip()
+            if line and line[0].isdigit() and '.' in line[:3]:
+                line = line.split('.', 1)[1].strip()
+            if line:
+                items.append(line)
+        return items
 
 
 # --------------------------
