@@ -150,20 +150,7 @@ elif section == "▼ AI Mentor":
                 response = mentor.critical_thinking_mode(user_query)
                 if response['success']:
                     st.markdown("**GUIDING QUESTIONS:**")
-                    for q in response['guiding_questions']:
-                        st.write(f"- {q}")
-
-                    st.markdown("**REFLECTION PROMPTS:**")
-                    for r in response['reflection_prompts']:
-                        st.write(f"- {r}")
-
-                    st.markdown("**CHALLENGE POINTS:**")
-                    for c in response['challenge_points']:
-                        st.write(f"- {c}")
-
-                    st.markdown("**NEXT STEPS:**")
-                    for n in response['next_steps']:
-                        st.write(f"- {n}")
+                    st.write(f"{response.get('full_response', '')}")
 
                     full_response = response.get('full_response', '')
                     download_text(full_response, "socratic_response.txt")
@@ -176,13 +163,27 @@ elif section == "▼ AI Mentor":
         st.write("Get direct, actionable answers.")
         user_query = st.text_area("Ask your question:")
 
+        template_type = st.selectbox(
+            "select template type:",
+            ["Auto-detect", "SWOT Analysis", "Budget Outline", "Action Plan", "Stakeholder Analysis", "Project Timeline"]
+        )
+
         if st.button("Generate Solution"):
             if user_query.strip() == "":
                 st.warning("Please type something.")
             else:
-                response = mentor.solution_mode(user_query)
+                template_map = {
+                    "Auto-detect": "auto",
+                    "SWOT Analysis": "swot",
+                    "Budget Outline": "budget",
+                    "Action Plan": "action_plan",
+                    "Stakeholder Analysis": "stakeholder",
+                    "Project Timeline": "timeline"
+                }
+                response = mentor.solution_mode(user_query, template_map[template_type])
                 if response['success']:
                     template = response.get('template', {})
+                    st.write(f"{response.get('full_response', '')}")
                     if template:
                         st.markdown("**Solution Template:**")
                         for section_name, lines in template.items():
@@ -219,7 +220,7 @@ elif section == "▼ AI Mentor":
             with st.chat_message("assistant"):
                 st.write(ai_msg)
 
-        user_input = st.chat_input("Type your message...")
+        user_input = st.text_area("Type your message...")
 
         if user_input:
             with st.chat_message("user"):
@@ -234,4 +235,4 @@ elif section == "▼ AI Mentor":
 
         if st.button("Clear Chat History"):
             st.session_state.chat_history = []
-            st.experimental_rerun()
+            st.rerun()
