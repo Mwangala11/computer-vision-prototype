@@ -68,7 +68,6 @@ if section == "▼ Problem Analysis":
             if problem_text.strip() == "":
                 st.warning("Please enter a problem description.")
             else:
-                # --- Use text classifier ---
                 classification_result = platform.problem_classifier.classify_problem(problem_text)
 
                 if classification_result['success']:
@@ -81,7 +80,6 @@ if section == "▼ Problem Analysis":
                     st.write(f"Confidence: {confidence}")
                     st.write(f"Reasoning: {reasoning}")
 
-                    # Generate mission statement
                     mission = platform.mission_generator.generate_mission_statement(
                         problem_text,
                         context=f"Category: {category}"
@@ -90,7 +88,6 @@ if section == "▼ Problem Analysis":
                     st.markdown(f"**Mission Statement:** {mission.get('mission_statement', '')}")
                     st.markdown(f"**Summary:** {platform._create_text_summary(problem_text, classification_result, mission)}")
 
-                    # Download buttons
                     download_text(mission.get('mission_statement', ''), "mission_statement.txt")
                     download_text(platform._create_text_summary(problem_text, classification_result, mission), "problem_summary.txt")
                 else:
@@ -106,7 +103,6 @@ if section == "▼ Problem Analysis":
             st.image(uploaded_img, caption="Uploaded Image", use_container_width=True)
 
             if st.button("Analyze Image"):
-                # --- Use full process_image pipeline ---
                 analysis_result = platform.process_image(img_path)
 
                 if analysis_result['success']:
@@ -120,7 +116,6 @@ if section == "▼ Problem Analysis":
                     st.markdown(f"**Mission Statement:** {mission.get('mission_statement', '')}")
                     st.markdown(f"**Summary:** {analysis_result.get('summary', '')}")
 
-                    # Download buttons
                     download_text(mission.get('mission_statement', ''), "mission_statement.txt")
                     download_text(analysis_result.get('summary', ''), "problem_summary.txt")
                 else:
@@ -207,32 +202,47 @@ elif section == "▼ AI Mentor":
                 else:
                     st.error(f"Error: {response.get('error', 'Failed to generate response')}")
 
-    # ---------- INTERACTIVE CHAT ----------
+    # ==============================
+    # INTERACTIVE CHAT MODE
+    # ==============================
     elif mentor_option == "Interactive Chat":
-        st.subheader("Interactive Chat")
+        st.subheader("💬 Interactive Chat")
 
+        # Initialize chat history if it doesn't exist
         if "chat_history" not in st.session_state:
             st.session_state.chat_history = []
 
-        for user_msg, ai_msg in st.session_state.chat_history:
-            with st.chat_message("user"):
-                st.write(user_msg)
-            with st.chat_message("assistant"):
-                st.write(ai_msg)
+        # Display previous messages
+        for role, message in st.session_state.chat_history:
+            if role == "user":
+                st.chat_message("user").markdown(message)
+            else:
+                st.chat_message("assistant").markdown(message)
 
-        user_input = st.text_area("Type your message...")
+        # Chat input box at the bottom
+        user_input = st.chat_input("Type your message...")
 
         if user_input:
-            with st.chat_message("user"):
-                st.write(user_input)
+            # Add user message to chat history and display
+            st.session_state.chat_history.append(("user", user_input))
+            st.chat_message("user").markdown(user_input)
 
-            ai_reply = mentor.interactive_mentoring(user_input).get('mentor_response', '')
+            try:
+                # Call AIMentor's interactive method
+                ai_response = mentor.interactive_mentoring(user_input).get(
+                    "mentor_response", "Sorry, I could not generate a response."
+                )
 
-            with st.chat_message("assistant"):
-                st.write(ai_reply)
+                # Add AI reply to chat history and display
+                st.session_state.chat_history.append(("assistant", ai_response))
+                st.chat_message("assistant").markdown(ai_response)
 
-            st.session_state.chat_history.append((user_input, ai_reply))
+            except Exception as e:
+                error_msg = f"⚠️ Error: {e}"
+                st.session_state.chat_history.append(("assistant", error_msg))
+                st.chat_message("assistant").markdown(error_msg)
 
+        # Button to clear chat history
         if st.button("Clear Chat History"):
             st.session_state.chat_history = []
-            st.rerun()
+            st.experimental_rerun()
